@@ -12,6 +12,14 @@ from infrastructure.models import Base
 # access to the values within the .ini file in use.
 config = context.config
 
+# Переопределяем URL базы данных из переменных окружения
+import os
+database_url = os.getenv("DATABASE_URL")
+
+if not database_url:
+    raise ValueError("DATABASE_URL environment variable is required")
+config.set_main_option("sqlalchemy.url", database_url)
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:

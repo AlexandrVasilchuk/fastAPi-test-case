@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: ml_logging_postgres
+    environment:
+      POSTGRES_DB: ml_logging_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ml_logging_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ml_logging_network
+
+  # Приложение
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ml_logging_app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/ml_logging_db
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ml_logging_db
+      DB_USER: postgres
+      DB_PASSWORD: password
+      DEBUG: "true"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - ml_logging_network
+    command: >
+      sh -c "
+        echo 'Database is ready, applying migrations...' &&
+        alembic upgrade head &&
+        echo 'Starting application...' &&
+        uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+
+volumes:
+  postgres_data:
+
+networks:
+  ml_logging_network:
+    driver: bridge

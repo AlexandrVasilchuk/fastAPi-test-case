@@ -9,7 +9,6 @@ from application.schemas import (
     PredictionStatsResponse,
 )
 from application.use_cases import GetPredictionStatsUseCase, LogPredictionUseCase
-from domain.exceptions import create_http_exception
 from domain.services import PredictionLogService
 from infrastructure.database import get_db_session
 from infrastructure.repositories import SQLAlchemyPredictionLogRepository
@@ -38,10 +37,10 @@ async def log_prediction(
         return result
     except ValueError as e:
         log_error(e, "log_prediction validation")
-        raise create_http_exception(400, "Неверные данные запроса")
+        raise HTTPException(400, f"Неверные данные запроса {str(e)}")
     except Exception as e:
         log_error(e, "log_prediction")
-        raise create_http_exception(500, "Внутренняя ошибка сервера")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
 
 
 @router.get("/predictions", response_model=list[PredictionLogResponse])
@@ -63,7 +62,7 @@ async def get_all_predictions(
         ]
     except Exception as e:
         log_error(e, "get_all_predictions")
-        raise create_http_exception(500, "Внутренняя ошибка сервера")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
 
 
 @router.get("/predictions/{prediction_id}", response_model=PredictionLogResponse)
@@ -75,7 +74,7 @@ async def get_prediction_by_id(
     try:
         prediction = await service.get_prediction_by_id(prediction_id)
         if prediction is None:
-            raise create_http_exception(404, "Предсказание не найдено")
+            raise HTTPException(404, "Предсказание не найдено")
 
         return PredictionLogResponse(
             id=prediction.id,
@@ -88,7 +87,7 @@ async def get_prediction_by_id(
         raise
     except Exception as e:
         log_error(e, "get_prediction_by_id")
-        raise create_http_exception(500, "Внутренняя ошибка сервера")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
 
 
 @router.delete("/predictions/{prediction_id}")
@@ -100,14 +99,14 @@ async def delete_prediction(
     try:
         deleted = await service.delete_prediction(prediction_id)
         if not deleted:
-            raise create_http_exception(404, "Предсказание не найдено")
+            raise HTTPException(404, "Предсказание не найдено")
 
         return {"message": "Предсказание успешно удалено"}
     except HTTPException:
         raise
     except Exception as e:
         log_error(e, "delete_prediction")
-        raise create_http_exception(500, "Внутренняя ошибка сервера")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
 
 
 @router.get("/stats", response_model=PredictionStatsResponse)
@@ -122,13 +121,18 @@ async def get_stats(
         # Парсим даты
         from_dt = datetime.fromisoformat(from_date)
         to_dt = datetime.fromisoformat(to_date)
+        # Убираем timezone для совместимости с PostgreSQL
+        if from_dt.tzinfo is not None:
+            from_dt = from_dt.replace(tzinfo=None)
+        if to_dt.tzinfo is not None:
+            to_dt = to_dt.replace(tzinfo=None)
 
         use_case = GetPredictionStatsUseCase(service)
         result = await use_case.execute(model_name, from_dt, to_dt)
         return result
     except ValueError as e:
         log_error(e, "get_stats date parsing")
-        raise create_http_exception(400, "Неверный формат даты")
+        raise HTTPException(400, "Неверный формат даты")
     except Exception as e:
         log_error(e, "get_stats")
-        raise create_http_exception(500, "Внутренняя ошибка сервера")
+        raise HTTPException(500, "Внутренняя ошибка сервера")

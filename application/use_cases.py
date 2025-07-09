@@ -18,6 +18,9 @@ class LogPredictionUseCase:
         """Выполнить логирование предсказания"""
         # Используем текущее время если timestamp не указан
         timestamp = data.timestamp or datetime.now(datetime.UTC)
+        # Убираем timezone для совместимости с PostgreSQL
+        if timestamp.tzinfo is not None:
+            timestamp = timestamp.replace(tzinfo=None)
 
         prediction_log = await self.service.log_prediction(
             model_name=data.model_name,

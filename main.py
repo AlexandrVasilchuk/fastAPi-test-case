@@ -7,19 +7,31 @@ from config import settings
 from infrastructure.database import engine
 from presentation.controllers import router
 
+import asyncio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Управление жизненным циклом приложения"""
-    # Проверяем подключение к базе данных
-    try:
-        async with engine.begin() as conn:
-            await conn.execute("SELECT 1")
-    except Exception as e:
-        print(f"Ошибка подключения к базе данных: {e}")
-        print("Убедитесь, что миграции применены: alembic upgrade head")
+    # Ждем готовности базы данных
+    print("Ожидание готовности базы данных...")
+    max_retries = 30
+    retry_delay = 2
+    
+    for attempt in range(max_retries):
+        try:
+            from sqlalchemy import text
+            async with engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+            print(" База данных готова")
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Попытка {attempt + 1}/{max_retries}: База данных еще не готова, ждем {retry_delay}с...")
+                await asyncio.sleep(retry_delay)
+            else:
+                print(f"Не удалось подключиться к базе данных после {max_retries} попыток: {e}")
+                exit(1)
+    
     yield
-
 
 app = FastAPI(
     title=settings.app_name,
@@ -41,7 +53,6 @@ app.add_middleware(
 # Подключаем роутеры
 app.include_router(router, prefix="/api/v1", tags=["predictions"])
 
-
 @app.get("/")
 async def root():
     """Корневой эндпоинт"""
@@ -51,12 +62,10 @@ async def root():
         "docs": "/docs",
     }
 
-
 @app.get("/health")
 async def health_check():
     """Проверка здоровья сервиса"""
     return {"status": "healthy"}
-
 
 @app.get("/ready")
 async def readiness_check():
@@ -70,5 +79,4 @@ async def readiness_check():
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
