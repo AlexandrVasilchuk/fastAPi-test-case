@@ -274,47 +274,10 @@ test/
 
 Проект использует Poetry для управления зависимостями:
 
-```bash
-# Установка зависимостей
-poetry install
-
-# Добавление новой зависимости
-poetry add package-name
-
-# Добавление dev зависимости
-poetry add --group dev package-name
-
-# Обновление зависимостей
-poetry update
-```
-
 ## Развертывание
 
-### Docker (опционально)
-
-Создайте `Dockerfile`:
-
 ```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Установка Poetry
-RUN pip install poetry
-
-# Копирование конфигурации Poetry
-COPY pyproject.toml poetry.lock ./
-
-# Установка зависимостей
-RUN poetry config virtualenvs.create false
-RUN poetry install --no-dev
-
-# Копирование кода
-COPY . .
-
-EXPOSE 8000
-
-CMD ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+docker compose up --build -d
 ```
 
 ### Миграции базы данных
@@ -359,53 +322,3 @@ alembic revision --autogenerate -m "Описание изменений"
 - Защита от SQL-инъекций через SQLAlchemy ORM
 - Кастомные исключения для каждого слоя архитектуры
 - Логирование ошибок для отладки без раскрытия информации пользователю
-
-## Расширение функциональности
-
-### Добавление новой сущности
-
-1. Создайте доменную сущность в `domain/entities.py`
-2. Создайте интерфейс репозитория, наследуясь от `BaseRepository`
-3. Создайте SQLAlchemy модель в `infrastructure/models.py`
-4. Реализуйте репозиторий, наследуясь от `SQLAlchemyBaseRepository`
-5. Добавьте методы в доменный сервис
-6. Создайте use cases и схемы
-7. Добавьте контроллеры
-
-### Пример добавления новой сущности
-
-```python
-# domain/entities.py
-@dataclass
-class User:
-    id: Optional[int] = None
-    name: str
-    email: str
-
-# domain/repositories.py
-class UserRepository(BaseRepository[User, int]):
-    pass
-
-# infrastructure/models.py
-class UserModel(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    email = Column(String, nullable=False, unique=True)
-
-# infrastructure/repositories.py
-class SQLAlchemyUserRepository(SQLAlchemyBaseRepository[User, int, UserModel], UserRepository):
-    def __init__(self, session: AsyncSession):
-        super().__init__(session, UserModel)
-    
-    def _entity_to_model(self, entity: User) -> UserModel:
-        return UserModel(name=entity.name, email=entity.email)
-    
-    def _model_to_entity(self, model: UserModel) -> User:
-        return User(id=model.id, name=model.name, email=model.email)
-    
-    def _update_model_from_entity(self, model: UserModel, entity: User) -> None:
-        model.name = entity.name
-        model.email = entity.email
-```
-
